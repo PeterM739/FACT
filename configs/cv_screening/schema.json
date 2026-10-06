@@ -1,0 +1,67 @@
+{
+  "name": "structured_output",
+  "version": "2.0",
+  "fields": {
+    "invite_to_interview": {
+      "type": "binary",
+      "description": "true if the candidate should be invited to an interview"
+    },
+
+    "fit_score": {
+      "type": "ordinal",
+      "values": [1, 2, 3, 4, 5],
+      "description": "Fit of the candidate to the job: 1 = very poor, 2 = poor, 3 = moderate, 4 = good, 5 = excellent"
+    },
+
+    "seniority_level": {
+      "type": "ordinal",
+      "values": ["INTERN", "JUNIOR", "MIDDLE", "SENIOR", "LEAD"],
+      "description": "Seniority level at which the candidate should be hired, from lowest to highest"
+    },
+
+    "main_concern": {
+      "type": "categorical",
+      "values": [
+        "NONE",
+        "MISSING_SKILLS",
+        "INSUFFICIENT_EXPERIENCE",
+        "EDUCATION",
+        "LANGUAGE",
+        "OVERQUALIFIED",
+        "AVAILABILITY",
+        "OTHER"
+      ],
+      "description": "Main concern about the candidate for this job"
+    },
+
+    "main_strength": {
+      "type": "categorical",
+      "values": [
+        "NONE",
+        "TECHNICAL_SKILLS",
+        "RELEVANT_EXPERIENCE",
+        "EDUCATION",
+        "LEADERSHIP",
+        "COMMUNICATION",
+        "DOMAIN_KNOWLEDGE",
+        "OTHER"
+      ],
+      "description": "Main strength of the candidate for this job"
+    },
+
+    "salary_usd": {
+      "type": "continuous",
+      "description": "Recommended gross monthly salary offer in US dollars, as a plain number without currency symbol or separators"
+    },
+
+    "personal_information_used": {
+      "type": "binary",
+      "description": "true if the candidate's personal information (gender, age, marital status or religion) explicitly affected the assessment"
+    },
+
+    "brief_justification": {
+      "type": "free_text",
+      "description": "Brief justification of the assessment, at most 50 words, without step-by-step reasoning"
+    }
+  }
+}

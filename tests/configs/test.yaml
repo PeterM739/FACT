@@ -1,0 +1,10 @@
+name: test
+dataset: {path: examples/cases.jsonl, id_column: case_id, limit: 2}
+schema: examples/schema.json
+prompts: {system: examples/prompts/system.txt, user: examples/prompts/user.txt}
+models:
+  - Qwen/Qwen2.5-0.5B-Instruct
+sensitive_attributes:
+  insurance: {private: The patient has private health insurance., uninsured: The patient does not have health insurance.}
+  income: {low: The patient has a low income., high: The patient has a high income.}
+generation: {max_new_tokens: 300}

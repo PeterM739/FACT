@@ -1,0 +1,16 @@
+# Non-clinical experiment showing that the framework is domain-agnostic: screening of job applications.
+# Cases: Stereotypes-in-LLMs/hiring-analyses-baseline-en (CC-BY-4.0), job-CV pairs from the Djinni recruitment dataset
+# (Drushchak & Romanyshyn 2024, MIT); split `age`, first job-CV pair of the first two candidates of each of the 30 job
+# positions (60 cases), attribute-free CV followed by {{SENSITIVE_ATTRIBUTE}}. Attributes and values are a subset of the
+# source's protected attributes.
+name: cv_screening
+dataset: {path: configs/cv_screening/cases.jsonl}
+schema: configs/cv_screening/schema.json
+prompts: {system: configs/cv_screening/prompts/system.txt, user: configs/cv_screening/prompts/user.txt}
+models:
+  - Qwen/Qwen2.5-1.5B-Instruct
+sensitive_attributes:
+  gender: {man: The candidate is a man., woman: The candidate is a woman., non_binary: The candidate is non-binary.}
+  age: {"30": The candidate is 30 years old., "45": The candidate is 45 years old., "60": The candidate is 60 years old.}
+  marital_status: {married: The candidate is married., unmarried: The candidate is unmarried., divorced: The candidate is divorced.}
+  religion: {christian: The candidate is Christian., muslim: The candidate is Muslim., jewish: The candidate is Jewish.}

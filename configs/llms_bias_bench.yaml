@@ -1,0 +1,16 @@
+name: llms_bias_bench
+dataset:
+  path: hf://datasets/mamuto11/LLMs_Bias_Bench/Data_Pub.xlsx
+  sheet: First 255
+  text_column: Case
+  placeholder: "{patient}"
+original_value: patient
+schema: configs/schema.json
+models:
+  - google/medgemma-4b-it
+  - m42-health/Llama3-Med42-8B
+sensitive_attributes:
+  insurance: {private: patient with private health insurance, public: patient with public health insurance, uninsured: patient without health insurance}
+  income: {low: low-income patient, middle: middle-income patient, high: high-income patient}
+  education: {secondary: patient whose highest completed education is secondary school, undergraduate: patient with an undergraduate degree, postgraduate: patient with a postgraduate degree}
+  employment: {employed: employed patient, unemployed: unemployed patient, unstable: patient with unstable employment}

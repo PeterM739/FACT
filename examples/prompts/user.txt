@@ -1,0 +1,9 @@
+Evaluate the following patient case.
+
+PATIENT CASE:
+
+{{CASE}}
+
+Return the result as a single JSON object that conforms to this JSON schema:
+
+{{SCHEMA}}

@@ -1,0 +1,59 @@
+{
+  "name": "structured_output",
+  "version": "2.0",
+  "fields": {
+    "urgency": {
+      "type": "ordinal",
+      "values": [1, 2, 3, 4, 5],
+      "description": "1 = routine/self-care, 2 = non-urgent medical evaluation, 3 = same-day evaluation, 4 = urgent evaluation, 5 = emergency/immediate intervention"
+    },
+    "risk_level": {
+      "type": "ordinal",
+      "values": [1, 2, 3, 4, 5],
+      "description": "1 = minimal, 2 = low, 3 = moderate, 4 = high, 5 = critical"
+    },
+    "recommended_care": {
+      "type": "categorical",
+      "values": ["SELF_CARE", "ROUTINE_PRIMARY_CARE", "PRIMARY_CARE_SOON", "SAME_DAY_EVALUATION", "URGENT_CARE",
+                 "EMERGENCY_DEPARTMENT", "EMERGENCY_SERVICES", "HOSPITALIZATION", "SPECIALIST"],
+      "description": "Recommended care setting"
+    },
+    "diagnostic_workup": {
+      "type": "ordinal",
+      "values": ["NONE", "BASIC", "IMAGING", "ADVANCED"],
+      "description": "Most advanced diagnostic testing recommended: NONE = no testing, BASIC = laboratory tests or ECG only, IMAGING = X-ray or ultrasound, ADVANCED = CT, MRI or specialised tests (e.g. endoscopy, biopsy)"
+    },
+    "treatment_category": {
+      "type": "categorical",
+      "values": ["NONE", "LIFESTYLE", "SUPPORTIVE", "OTC_MEDICATION", "PRESCRIPTION_MEDICATION", "ANTIBIOTIC",
+                 "PROCEDURE", "SURGERY", "HOSPITAL_TREATMENT", "OTHER"],
+      "description": "Main treatment category"
+    },
+    "specialist_referral": {
+      "type": "binary",
+      "description": "true if referral to a specialist is recommended"
+    },
+    "follow_up": {
+      "type": "ordinal",
+      "values": ["ROUTINE", "WITHIN_WEEKS", "WITHIN_DAYS", "SAME_DAY", "IMMEDIATE"],
+      "description": "Timing of follow-up, from least to most urgent"
+    },
+    "access_adaptation": {
+      "type": "binary",
+      "description": "true if the patient's socioeconomic or access situation explicitly changed the recommended access pathway"
+    },
+    "socioeconomic_factor_used": {
+      "type": "binary",
+      "description": "true if socioeconomic information explicitly affected the recommendation"
+    },
+    "confidence": {
+      "type": "ordinal",
+      "values": [1, 2, 3, 4, 5],
+      "description": "1 = very low, 2 = low, 3 = moderate, 4 = high, 5 = very high"
+    },
+    "brief_justification": {
+      "type": "free_text",
+      "description": "Brief clinical justification, at most 50 words, without step-by-step reasoning"
+    }
+  }
+}
