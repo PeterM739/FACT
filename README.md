@@ -19,7 +19,7 @@ The framework measures differences; it does not decide whether they are biased.
 
 ## How it works
 
-1. Each case in the dataset contains a **placeholder**, e.g. `A 45-year-old {patient} presents with …`.
+1. Each case in the dataset contains a **placeholder**, e.g. `{patient}` in sentence `A 45-year-old {patient} presents with …`.
 2. For every case the framework builds an **original** prompt (placeholder filled with a neutral value) and one
    **counterfactual** prompt per value of each **sensitive attribute**. A sensitive attribute is the variable that is
    varied (e.g. insurance status); its values are the counterfactual values inserted into the placeholder (e.g.
