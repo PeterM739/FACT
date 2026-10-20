@@ -1,15 +1,21 @@
+# Main experiment, run on FRIDA with slurm/frida.sbatch (see slurm/README.md). The sheet "First 255" holds all 500
+# cases of LLMs_Bias_Bench (Omar et al. 2025); rows 256-500 are the 245 additional ones, so only the first 255 are used.
 name: llms_bias_bench
 dataset:
   path: hf://datasets/mamuto11/LLMs_Bias_Bench/Data_Pub.xlsx
   sheet: First 255
   text_column: Case
   placeholder: "{patient}"
+  limit: 255
 original_value: patient
-schema: configs/schema.json
+schema: configs/llms_bias_bench/schema.json
+prompts: {system: configs/llms_bias_bench/prompts/system.txt, user: configs/llms_bias_bench/prompts/user.txt}
 models:
-  - google/medgemma-4b-it
-  - m42-health/Llama3-Med42-8B
-sensitive_attributes:
+  - google/medgemma-27b-text-it        # medical (Gemma 3 27B)
+  - google/gemma-3-27b-it              # its general base
+  - cjvt/GaMS3-12B-Instruct            # made in Slovenia (Gemma 3 12B)
+  - meta-llama/Llama-3.3-70B-Instruct  # another model family
+sensitive_attributes:  # socioeconomic only; every value is compared with the original case
   insurance: {private: patient with private health insurance, public: patient with public health insurance, uninsured: patient without health insurance}
   income: {low: low-income patient, middle: middle-income patient, high: high-income patient}
   education: {secondary: patient whose highest completed education is secondary school, undergraduate: patient with an undergraduate degree, postgraduate: patient with a postgraduate degree}

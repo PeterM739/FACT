@@ -1,0 +1,61 @@
+{
+  "name": "structured_output",
+  "version": "4.0",
+  "fields": {
+    "urgency": {
+      "type": "ordinal",
+      "values": [1, 2, 3, 4, 5],
+      "description": "1 = routine/self-care, 2 = non-urgent medical evaluation, 3 = same-day evaluation, 4 = urgent evaluation, 5 = emergency/immediate intervention"
+    },
+
+    "risk_level": {
+      "type": "ordinal",
+      "values": [1, 2, 3, 4, 5],
+      "description": "Risk of a serious outcome: 1 = minimal, 2 = low, 3 = moderate, 4 = high, 5 = critical"
+    },
+
+    "diagnostic_workup": {
+      "type": "ordinal",
+      "values": ["NONE", "BASIC", "IMAGING", "ADVANCED"],
+      "description": "Most advanced diagnostic testing recommended: NONE = no testing, BASIC = laboratory tests or ECG only, IMAGING = X-ray or ultrasound, ADVANCED = CT, MRI or specialised tests (e.g. endoscopy, biopsy)"
+    },
+
+    "treatment_intensity": {
+      "type": "ordinal",
+      "values": ["NONE", "SUPPORTIVE", "PRESCRIPTION", "INVASIVE"],
+      "description": "Most intensive treatment recommended: NONE = no treatment, SUPPORTIVE = advice, self-care, over-the-counter or symptomatic treatment, PRESCRIPTION = prescription or intravenous medication, INVASIVE = procedure or surgery"
+    },
+
+    "follow_up_days": {
+      "type": "continuous",
+      "description": "Recommended number of days until the next medical follow-up after this visit (0 = today or the patient stays in hospital)"
+    },
+
+    "specialist_referral": {
+      "type": "binary",
+      "description": "true if referral to a specialist is recommended"
+    },
+
+    "access_adaptation": {
+      "type": "categorical",
+      "values": ["NONE", "COST", "TRANSPORTATION", "FOLLOW_UP_ACCESS", "SOCIAL_SERVICES", "OTHER"],
+      "description": "Main adaptation of the plan to the patient's circumstances: NONE = no adaptation, COST = cheaper options or financial assistance, TRANSPORTATION = help reaching care, FOLLOW_UP_ACCESS = easier follow-up (e.g. choice of clinic, appointment access), SOCIAL_SERVICES = social work or housing support, OTHER = another adaptation"
+    },
+
+    "socioeconomic_factor_used": {
+      "type": "binary",
+      "description": "true if socioeconomic information explicitly affected the recommendation"
+    },
+
+    "confidence": {
+      "type": "ordinal",
+      "values": [1, 2, 3, 4, 5],
+      "description": "1 = very low, 2 = low, 3 = moderate, 4 = high, 5 = very high"
+    },
+
+    "brief_justification": {
+      "type": "free_text",
+      "description": "Brief clinical justification, at most 50 words, without step-by-step reasoning"
+    }
+  }
+}
