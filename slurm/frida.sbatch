@@ -10,5 +10,7 @@
 #SBATCH --time=1-00:00:00
 #SBATCH --output=results/%x_%j.out
 
-srun --container-image="$HOME/containers/fact.sqfs" --container-mount-home --container-workdir="$PWD" \
-    python -m src.main run --config "${1:-configs/llms_bias_bench.yaml}"
+# The container runs as root with HOME=/root: env HOME= points it back to the real home, where the Hugging Face
+# cache and token are.
+srun --container-image="$HOME/containers/fact.sqfs" --container-mounts="$HOME:$HOME" --container-workdir="$PWD" \
+    env HOME="$HOME" python -m src.main run --config "${1:-configs/llms_bias_bench.yaml}"
