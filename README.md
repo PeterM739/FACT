@@ -62,7 +62,10 @@ Then open `results/example_<timestamp>/report.pdf`.
 | `schema.json` | its output schema |
 | `prompts/system.txt`, `prompts/user.txt` | its prompts |
 
-[`configs/`](configs/) holds the files of the actual study, with its own `schema.json` and `prompts/`:
+[`configs/`](configs/) holds the files of the actual study: `llms_bias_bench.yaml` (the main experiment),
+`llms_bias_bench_local.yaml` (its small local test) and their shared `llms_bias_bench/` (`schema.json`, `prompts/`),
+plus `cv_screening` (a non-clinical experiment). [`slurm/`](slurm/README.md) runs the main experiment on the FRIDA GPU
+cluster.
 
 ## Step-by-step: your own experiment
 
@@ -426,7 +429,8 @@ synthetic results.
 ## Project structure
 
 ```
-configs/     files of the actual study: llms_bias_bench.yaml, llms_bias_bench_local.yaml, schema.json, prompts/
+configs/     files of the actual study: llms_bias_bench.yaml, llms_bias_bench_local.yaml, llms_bias_bench/ (schema.json, prompts/), cv_screening
+slurm/       FRIDA job script (frida.sbatch) and instructions (README.md)
 examples/    template set, not used by the study: example.yaml, cases.jsonl, schema.json, prompts/
 src/
   main.py        command line and pipeline stages

@@ -1,23 +1,20 @@
-# Local test of the thesis setup on a 6 GB GPU (RTX 2060): 10 sampled cases, 4-bit model. The thesis results come from
-# llms_bias_bench.yaml (unquantized, large GPU). Med42-8B needs about 6 GB even in 4-bit, so it is left out here.
+# Local test of the main setup (llms_bias_bench.yaml) on a 6 GB GPU (RTX 2060): the first 10 cases, small models, one
+# of them 4-bit. The results of the study come from llms_bias_bench.yaml (unquantized, large GPU).
 name: llms_bias_bench_local
 dataset:
   path: hf://datasets/mamuto11/LLMs_Bias_Bench/Data_Pub.xlsx
   sheet: First 255
   text_column: Case
   placeholder: "{patient}"
-  sample: 100
+  limit: 10
 original_value: patient
-schema: configs/llms_bias_bench_local/schema.json
+schema: configs/llms_bias_bench/schema.json
+prompts: {system: configs/llms_bias_bench/prompts/system.txt, user: configs/llms_bias_bench/prompts/user.txt}
 models:  # Gemma overflows in float16, the GPU's default; batch 4 no longer fits in 6 GB
   - {name: google/medgemma-4b-it, quantization: 4bit, dtype: bfloat16, batch_size: 2}
   - {name: Qwen/Qwen2.5-1.5B-Instruct}
 sensitive_attributes:
-  insurance:
-    values: {private: "The patient has private health insurance.", public: "The patient has public health insurance.", uninsured: "The patient does not have health insurance."}
-  income:
-    values: {low: "The patient has a low income.", middle: "The patient has a middle income.", high: "The patient has a high income."}
-  education:
-    values: {secondary: "The patient's highest completed education is secondary school.", undergraduate: "The patient has completed an undergraduate degree.", postgraduate: "The patient has completed a postgraduate degree."}
-  employment:
-    values: {employed: "The patient is employed in a stable position.", unstable: "The patient has unstable employment with an uncertain work schedule.", unemployed: "The patient is currently unemployed."}
+  insurance: {private: patient with private health insurance, public: patient with public health insurance, uninsured: patient without health insurance}
+  income: {low: low-income patient, middle: middle-income patient, high: high-income patient}
+  education: {secondary: patient whose highest completed education is secondary school, undergraduate: patient with an undergraduate degree, postgraduate: patient with a postgraduate degree}
+  employment: {employed: employed patient, unemployed: unemployed patient, unstable: patient with unstable employment}
