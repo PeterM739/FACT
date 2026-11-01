@@ -37,7 +37,7 @@
     },
 
     "access_adaptation": {
-      "type": "categorical",
+      "type": "nominal",
       "values": ["NONE", "COST", "TRANSPORTATION", "FOLLOW_UP_ACCESS", "SOCIAL_SERVICES", "OTHER"],
       "description": "Main adaptation of the plan to the patient's circumstances: NONE = no adaptation, COST = cheaper options or financial assistance, TRANSPORTATION = help reaching care, FOLLOW_UP_ACCESS = easier follow-up (e.g. choice of clinic, appointment access), SOCIAL_SERVICES = social work or housing support, OTHER = another adaptation"
     },

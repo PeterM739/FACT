@@ -2,12 +2,11 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from src.evaluation.metrics import (bootstrap, category_shift, group_fairness, rank_biserial, rate_ratio,
+from src.evaluation.metrics import (bootstrap, category_shift, cutoff_shift, group_fairness, rate_ratio,
                                     total_variation, wilson)
 from src.evaluation.statistical_tests import adjust, mcnemar, paired_t, stuart_maxwell, wilcoxon
 from src.generation.design import comparisons
 
-ALPHA = 0.05
 NO_CI = (np.nan, np.nan)
 
 
@@ -15,17 +14,27 @@ def _ci(prefix: str, bounds: tuple) -> dict:
     return {f"{prefix}_ci_lower": bounds[0], f"{prefix}_ci_upper": bounds[1]}
 
 
-def _shifts(d) -> dict:
-    return {"flips": int(np.count_nonzero(d)), "n_lower": int((d < 0).sum()), "n_higher": int((d > 0).sum())}
+def _changes(d) -> dict:
+    n, k = len(d), int(np.count_nonzero(d))
+    return {"metric": "change_rate", "metric_value": k / n, **_ci("metric", wilson(k, n)),
+            "flips": k, "n_lower": int((d < 0).sum()), "n_higher": int((d > 0).sum())}
+
+
+def _largest_shift(shift, labels: list, data: tuple, seed) -> dict:
+    s = shift(*data)
+    if not s.any():
+        return {"largest_shift_at": None, "largest_shift": None, **_ci("largest_shift", NO_CI)}
+    top = int(np.abs(s).argmax())
+    return {"largest_shift_at": labels[top], "largest_shift": s[top],
+            **_ci("largest_shift", bootstrap(data, lambda a, b: shift(a, b)[top], seed))}
 
 
 def analyze_binary(ref, cf, var, seed) -> dict:
     d = cf - ref
-    n, k, n1, n10 = len(d), int(np.count_nonzero(d)), int(ref.sum()), int((d < 0).sum())
+    n, n1, n10 = len(d), int(ref.sum()), int((d < 0).sum())
     boot = lambda data, f: bootstrap(data, f, seed)
     fair = group_fairness(ref, cf)
-    return {"metric": "counterfactual_flip_rate", "metric_value": k / n, **_ci("metric", wilson(k, n)),
-            "flips": k, "n01": int((d > 0).sum()), "n10": n10,
+    return {**_changes(d),
             "effect_size": "paired_proportion_difference", "effect_value": fair.pop("effect_value"),
             **_ci("effect", boot((d,), np.mean)), **fair,
             **_ci("rate_reference", wilson(n1, n)), **_ci("rate_counterfactual", wilson(int(cf.sum()), n)),
@@ -35,30 +44,23 @@ def analyze_binary(ref, cf, var, seed) -> dict:
 
 
 def analyze_ordinal(ref, cf, var, seed) -> dict:
-    d = cf - ref
-    n, s = len(d), _shifts(d)
-    boot = lambda f: bootstrap((d,), f, seed)
-    return {"metric": "change_rate", "metric_value": s["flips"] / n, **_ci("metric", wilson(s["flips"], n)),
-            "rate_lower": s["n_lower"] / n, **_ci("rate_lower", wilson(s["n_lower"], n)),
-            "rate_higher": s["n_higher"] / n, **_ci("rate_higher", wilson(s["n_higher"], n)),
-            "effect_size": "mean_counterfactual_difference", "effect_value": d.mean(), **_ci("effect", boot(np.mean)),
-            "rank_biserial": rank_biserial(d), **s,
+    d, k = cf - ref, len(var["values"])
+    boot = lambda x: bootstrap((x,), np.mean, seed)
+    return {**_changes(d),
+            "effect_size": "mean_counterfactual_difference", "effect_value": d.mean(), **_ci("effect", boot(d)),
+            "mean_absolute_difference": np.abs(d).mean(), **_ci("mean_absolute_difference", boot(np.abs(d))),
+            **_largest_shift(lambda a, b: cutoff_shift(a, b, k), [f"≥ {v}" for v in var["values"][1:]], (ref, cf), seed),
             **wilcoxon(d)}
 
 
-def analyze_categorical(ref, cf, var, seed) -> dict:
+def analyze_nominal(ref, cf, var, seed) -> dict:
     n, k, m = len(ref), int((ref != cf).sum()), len(var["values"])
     code = {c: i for i, c in enumerate(var["values"])}
     r, c = (np.array([code[v] for v in x]) for x in (ref, cf))
-    shift = category_shift(r, c, m)
-    top = int(np.abs(shift).argmax())
-    boot = lambda f: bootstrap((r, c), f, seed)
     return {"metric": "change_rate", "metric_value": k / n, **_ci("metric", wilson(k, n)), "flips": k,
             "effect_size": "total_variation_distance", "effect_value": total_variation(r, c, m),
-            **_ci("effect", boot(lambda a, b: total_variation(a, b, m))),
-            "largest_shift_category": var["values"][top] if shift.any() else None,
-            "largest_shift": shift[top] if shift.any() else None,
-            **_ci("largest_shift", boot(lambda a, b: category_shift(a, b, m)[top]) if shift.any() else NO_CI),
+            **_ci("effect", bootstrap((r, c), lambda a, b: total_variation(a, b, m), seed)),
+            **_largest_shift(lambda a, b: category_shift(a, b, m), var["values"], (r, c), seed),
             **stuart_maxwell(ref, cf, var["values"], seed)}
 
 
@@ -66,13 +68,14 @@ def analyze_continuous(ref, cf, var, seed) -> dict:
     d = cf - ref
     boot = lambda x: bootstrap((x,), np.mean, seed)
     sd = d.std(ddof=1) if len(d) > 1 else 0.0
-    return {"metric": "mean_absolute_difference", "metric_value": np.abs(d).mean(), **_ci("metric", boot(np.abs(d))),
+    return {**_changes(d),
             "effect_size": "mean_difference", "effect_value": d.mean(), **_ci("effect", boot(d)),
-            "d_z": d.mean() / sd if sd else np.nan, **_shifts(d),
+            "mean_absolute_difference": np.abs(d).mean(), **_ci("mean_absolute_difference", boot(np.abs(d))),
+            "d_z": d.mean() / sd if sd else np.nan,
             **paired_t(d)}
 
 
-ANALYZERS = {"binary": analyze_binary, "ordinal": analyze_ordinal, "categorical": analyze_categorical,
+ANALYZERS = {"binary": analyze_binary, "ordinal": analyze_ordinal, "nominal": analyze_nominal,
              "continuous": analyze_continuous}
 RESULT_COLUMNS = ["metric", "metric_value", "metric_ci_lower", "metric_ci_upper", "effect_size", "effect_value",
                   "effect_ci_lower", "effect_ci_upper", "test", "statistic", "df", "p_value", "note"]
@@ -96,7 +99,7 @@ def run_tests(pairs: pd.DataFrame, variables: list[dict], cfg, n_cases: int) -> 
                    "n_pairs": len(both), "n_pairs_invalid": n_cases - len(g), "n_pairs_undetermined": len(g) - len(both)}
             if len(both):
                 ref, cf = both.to_numpy().T
-                if var["type"] != "categorical":
+                if var["type"] != "nominal":
                     ref, cf = ref.astype(float), cf.astype(float)
                 row |= ANALYZERS[var["type"]](ref, cf, var, cfg.generation.seed)
             else:
@@ -110,5 +113,5 @@ def run_tests(pairs: pd.DataFrame, variables: list[dict], cfg, n_cases: int) -> 
     tests["adjusted_p_value"] = np.nan
     for _, idx in tests[tests["p_value"].notna()].groupby("family").groups.items():
         tests.loc[idx, "adjusted_p_value"] = adjust(tests.loc[idx, "p_value"].to_numpy())
-    tests["statistically_significant"] = tests["adjusted_p_value"] < ALPHA
+    tests["statistically_significant"] = tests["adjusted_p_value"] < cfg.statistics.alpha
     return tests

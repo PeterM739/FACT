@@ -12,7 +12,6 @@ import seaborn as sns
 from matplotlib.patches import Patch, Rectangle
 from tqdm import tqdm
 
-from src.evaluation.analyze import ALPHA
 from src.evaluation.metrics import transitions
 
 sns.set_theme(style="whitegrid", palette="colorblind", font="DejaVu Sans",
@@ -20,11 +19,7 @@ sns.set_theme(style="whitegrid", palette="colorblind", font="DejaVu Sans",
                   "legend.fontsize": 8, "figure.titlesize": 9, "pdf.fonttype": 42})
 WIDTH = 6.3  
 
-METRICS = {
-    "counterfactual_flip_rate": ("flip rate", ".3f"),
-    "change_rate": ("change rate", ".3f"),
-    "mean_absolute_difference": ("mean |Δ|", ".3g"),
-}
+METRICS = {"change_rate": ("change rate", ".3f")}
 LOWER, HIGHER = "#4393c3", "#d6604d"
 
 STEPS = {
@@ -68,8 +63,12 @@ def _tilt(ax) -> None:
     plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
 
 
-def _stars(p: float) -> str:
-    return "" if not p < ALPHA else "***" if p < 0.001 else "**" if p < 0.01 else "*"
+def star_levels(alpha: float) -> list:
+    return sorted((t for t in {alpha, 0.01, 0.001} if t <= alpha), reverse=True)
+
+
+def _stars(p: float, alpha: float) -> str:
+    return "*" * sum(p < t for t in star_levels(alpha))
 
 
 def interval(v, lo, hi, fmt: str = ".2f") -> str | None:
@@ -82,13 +81,13 @@ def _p_text(p: float) -> str:
     return "" if pd.isna(p) else "<0.001" if p < 0.001 else f"{p:.3f}"
 
 
-def result(r) -> tuple[str, str]:
+def result(r, alpha: float) -> tuple[str, str]:
     """Metric with CI and adjusted p with stars of one test row."""
     if pd.isna(r.metric_value):
         return "no valid pairs", ""
     metric = interval(r.metric_value, r.metric_ci_lower, r.metric_ci_upper, METRICS[r.metric][1])
     p = r.adjusted_p_value
-    return metric, f"{_p_text(p)} {_stars(p)}".strip()
+    return metric, f"{_p_text(p)} {_stars(p, alpha)}".strip()
 
 
 def unchanged(t: pd.DataFrame) -> bool:
@@ -105,10 +104,10 @@ def _mark_rows(ax, rows: list, heatmap=False) -> None:
         ax.axhspan(len(rows) - 1.5, len(rows) - 0.5, color="0.92", zorder=0)
 
 
-def _mark_significant(ax, rows: list, t: pd.DataFrame, heatmap=False) -> None:
+def _mark_significant(ax, rows: list, t: pd.DataFrame, alpha: float, heatmap=False) -> None:
     p = t.set_index("row")["adjusted_p_value"]
     for y, row in enumerate(rows):
-        if stars := _stars(p.get(row, np.nan)):
+        if stars := _stars(p.get(row, np.nan), alpha):
             ax.text(1.01, y + 0.5 * heatmap, stars, transform=ax.get_yaxis_transform(), va="center", fontsize=8)
 
 
@@ -181,7 +180,7 @@ def change_plot(d: FigureData, field):
         ax.grid(axis="y", visible=False)
         ax.set_title(model.split("/")[-1])
         _mark_rows(ax, rows)
-        _mark_significant(ax, rows, t[t["model"] == model])
+        _mark_significant(ax, rows, t[t["model"] == model], d.config.statistics.alpha)
     fig.legend(handles=[Patch(color=steps[k][1], label=steps[k][0]) for k in sorted(steps)], loc="outside lower center",
                ncols=len(steps), frameon=False)
     yield kind, safe(field), fig
@@ -210,8 +209,8 @@ def category_plot(d: FigureData, field):
         ax.tick_params(axis="y", rotation=0)
         ax.tick_params(labelleft=first, labelbottom=bottom)
         _mark_rows(ax, rows, heatmap=True)
-        _mark_significant(ax, rows, t[t["model"] == model], heatmap=True)
-    yield "categorical", safe(field), fig
+        _mark_significant(ax, rows, t[t["model"] == model], d.config.statistics.alpha, heatmap=True)
+    yield "nominal", safe(field), fig
 
 
 def transition_plot(d: FigureData, field):
@@ -239,14 +238,14 @@ def transition_plot(d: FigureData, field):
         _tilt(ax)
     for ax in axes.flat[n:]:
         ax.set_visible(False)
-    yield "categorical", safe(field, "transitions"), fig
+    yield "nominal", safe(field, "transitions"), fig
 
 
 BY_TYPE = {
     "binary": [change_plot],
     "ordinal": [change_plot],
     "continuous": [change_plot],
-    "categorical": [category_plot, transition_plot],
+    "nominal": [category_plot, transition_plot],
     "free_text": [],
 }
 CROSS = [overview]

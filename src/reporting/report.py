@@ -4,10 +4,11 @@ from pathlib import Path
 import pandas as pd
 import typst
 
-from src.evaluation.analyze import ALPHA
+from src.config import Config
 from src.evaluation.metrics import LEVEL, RESAMPLES
 from src.evaluation.statistical_tests import PERMUTATIONS
-from src.reporting.figures import METRICS, interval, labelled, pretty, result, safe, unchanged
+from src.reporting.figures import (METRICS, interval, labelled, pretty, pretty_category, result, safe, star_levels,
+                                   unchanged)
 
 TEMPLATE = Path(__file__).with_name("report.typ")
 FORMATS = ("pdf", "svg", "png")
@@ -16,10 +17,10 @@ EFFECTS = {"paired_proportion_difference": ("SPD", "+.3f"), "mean_counterfactual
            "total_variation_distance": ("TVD", ".3f"), "mean_difference": ("mean Δ", "+.3g")}
 
 COLUMNS = {
-    "binary": [("rate ref.", "rate_reference", None, ".3f"), ("SPD", "effect_value", "effect", "+.3f")],
-    "ordinal": [("mean Δ", "effect_value", "effect", "+.3f")],
-    "categorical": [("TVD", "effect_value", "effect", ".3f")],
-    "continuous": [("mean Δ", "effect_value", "effect", "+.3g"), ("d_z", "d_z", None, "+.2f")],
+    "binary": [("SPD", "effect_value", "+.3f"), ("DI", "rate_ratio", ".3f")],
+    "ordinal": [("mean Δ", "effect_value", "+.3f"), ("mean |Δ|", "mean_absolute_difference", ".3f")],
+    "nominal": [("largest shift", "largest_shift", "+.3f", "largest_shift_at"), ("TVD", "effect_value", ".3f")],
+    "continuous": [("mean Δ", "effect_value", "+.3g"), ("mean |Δ|", "mean_absolute_difference", ".3g")],
 }
 
 
@@ -48,29 +49,30 @@ def _effect(r) -> str | None:
     return value and f"{name} {value}"
 
 
-def _column(t: pd.DataFrame, value: str, ci: str | None, fmt: str) -> list:
-    lo, hi = (t[f"{ci}_ci_lower"], t[f"{ci}_ci_upper"]) if ci else ([None] * len(t),) * 2
-    return [interval(*v, fmt) for v in zip(t[value], lo, hi)]
+def _column(t: pd.DataFrame, value: str, fmt: str, label: str | None = None) -> list:
+    ci = value.removesuffix("_value")
+    cells = [interval(*v, fmt) for v in zip(t[value], t[f"{ci}_ci_lower"], t[f"{ci}_ci_upper"])]
+    return cells if label is None else [c and f"{pretty_category(a)} {c}" for a, c in zip(t[label], cells)]
 
 
-def _output_table(t: pd.DataFrame) -> dict:
-    results = [result(r) for r in t.itertuples()]
+def _output_table(t: pd.DataFrame, alpha: float) -> dict:
+    results = [result(r, alpha) for r in t.itertuples()]
     df = pd.DataFrame({"model": _short(t["model"]), "comparison": t["row"], "n": t["n_pairs"],
                        METRICS[t["metric"].dropna().iloc[0]][0]: [m for m, _ in results]})
-    for header, value, ci, fmt in COLUMNS[t["variable_type"].iloc[0]]:
-        df[header] = _column(t, value, ci, fmt)
+    for header, *column in COLUMNS[t["variable_type"].iloc[0]]:
+        df[header] = _column(t, *column)
     df["adj. p"] = [p for _, p in results]
     return _table(df, 1, "model")
 
 
-def _significant_table(tests: pd.DataFrame) -> dict:
+def _significant_table(tests: pd.DataFrame, alpha: float) -> dict:
     s = labelled(tests[tests["statistically_significant"] == True])
-    df = pd.DataFrame([(r.model, pretty(r.variable), r.row, _effect(r), result(r)[1]) for r in s.itertuples()],
+    df = pd.DataFrame([(r.model, pretty(r.variable), r.row, _effect(r), result(r, alpha)[1]) for r in s.itertuples()],
                       columns=["model", "output", "comparison", "effect", "adj. p"])
     return _table(df.assign(model=_short(df["model"])), 2, "model")
 
 
-def _outputs(store, tests: pd.DataFrame) -> tuple[list, dict]:
+def _outputs(store, tests: pd.DataFrame, alpha: float) -> tuple[list, dict]:
     fmt = next((f for f in FORMATS if any(store.figures.glob(f"*/*.{f}"))), FORMATS[0])
     by_variable = {safe(v): t for v, t in labelled(tests).groupby("variable", sort=False)}
     models = {safe(m, "overview"): m for m in tests["model"].unique()}
@@ -81,7 +83,7 @@ def _outputs(store, tests: pd.DataFrame) -> tuple[list, dict]:
             overview.append({"name": models[key], "figure": path})
         elif key in by_variable:
             t = by_variable[key]
-            outputs[key] = {"type": p.parent.name, "name": pretty(t["variable"].iloc[0]), "figure": path, "table": _output_table(t), "transitions": None}
+            outputs[key] = {"type": p.parent.name, "name": pretty(t["variable"].iloc[0]), "figure": path, "table": _output_table(t, alpha), "transitions": None}
         elif key.removesuffix("_transitions") in outputs:
             outputs[key.removesuffix("_transitions")]["transitions"] = path
     sections = {}
@@ -101,18 +103,20 @@ def report_data(store) -> dict:
     attributes = pd.DataFrame([(a, v, text) for a, spec in cfg["sensitive_attributes"].items() for v, text in spec["values"].items()], columns=["sensitive attribute", "value", "inserted text"])
     attributes.loc[attributes["sensitive attribute"].duplicated(), "sensitive attribute"] = ""
     fields = pd.DataFrame([(n, f["type"], ", ".join(map(str, f.get("values", [])))) for n, f in m["schema"]["fields"].items()], columns=["field", "type", "values"])
-    overview, sections = _outputs(store, tests)
+    alpha = Config.model_validate(cfg).statistics.alpha
+    overview, sections = _outputs(store, tests, alpha)
     return {
-        "title": m["experiment_id"], "created": _text(m["created"]), "finished": _text(m.get("finished")),
+        "title": m["experiment_id"], "analysis": store.out.name, "created": _text(m["created"]), "finished": _text(m.get("finished")),
         "dataset": cfg["dataset"]["path"], "cases": int(g["case_id"].nunique()),
         "generation": {k: _text(gen[k]) for k in ("repetitions", "temperature", "max_new_tokens")},
         "counts": ", ".join(f"{k} {v}" for k, v in g["status"].value_counts().items()), "generations": len(g),
         "schema": f"{m['schema']['name']} v{m['schema']['version']}",
         "models": _table(models, 5), "sensitive_attributes": _table(attributes, 3), "fields": _table(fields, 3),
-        "statistics": {"alpha": _text(ALPHA), "level": f"{LEVEL:.0%}", "bootstrap": f"{RESAMPLES:,}",
-                       "permutations": f"{PERMUTATIONS:,}"},
+        "statistics": {"alpha": _text(alpha), "level": f"{LEVEL:.0%}", "bootstrap": f"{RESAMPLES:,}",
+                       "permutations": f"{PERMUTATIONS:,}",
+                       "stars": ", ".join(f"{'*' * i} < {t:g}" for i, t in enumerate(star_levels(alpha), 1))},
         "overview": overview, "sections": sections, "tests": int(tests["p_value"].notna().sum()),
-        "significant": _significant_table(tests),
+        "significant": _significant_table(tests, alpha),
         "unchanged": [pretty(v) for v, t in tests.groupby("variable", sort=False) if unchanged(t)],
         "prompts": m["prompts"],
     }

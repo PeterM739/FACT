@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PICK = {
     "binary": lambda f, rng: rng.random() < 0.5,
     "ordinal": lambda f, rng: rng.choice(f["values"]),
-    "categorical": lambda f, rng: rng.choice(f["values"]),
+    "nominal": lambda f, rng: rng.choice(f["values"]),
     "continuous": lambda f, rng: rng.gauss(0, 1),
     "free_text": lambda f, rng: "Synthetic answer.",
 }
