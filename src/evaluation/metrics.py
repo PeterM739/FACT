@@ -2,7 +2,8 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from fairlearn.metrics import MetricFrame, equal_opportunity_difference, equalized_odds_difference, selection_rate
+from fairlearn.metrics import (MetricFrame, equal_opportunity_difference, equalized_odds_difference,
+                               false_positive_rate, selection_rate, true_positive_rate)
 from scipy import stats
 
 LEVEL, RESAMPLES = 0.95, 2000
@@ -23,14 +24,6 @@ def bootstrap(data: tuple, stat, seed: int) -> tuple[float, float]:
     return float(ci.low), float(ci.high)
 
 
-def rank_biserial(d) -> float:
-    d = d[d != 0]
-    if not len(d):
-        return 0.0
-    ranks = stats.rankdata(np.abs(d))
-    return float((ranks[d > 0].sum() - ranks[d < 0].sum()) / ranks.sum())
-
-
 def rate_ratio(ref, cf, axis=-1):
     return cf.mean(axis) / ref.mean(axis)
 
@@ -38,6 +31,12 @@ def rate_ratio(ref, cf, axis=-1):
 def category_shift(ref, cf, k: int):
     """Change in the share of each of the k categories (counterfactual − reference); ref and cf are category codes."""
     return (np.bincount(cf, minlength=k) - np.bincount(ref, minlength=k)) / len(ref)
+
+
+def cutoff_shift(ref, cf, k: int):
+    """Change in the share of answers at level j or higher, j = 2..k (counterfactual − reference)."""
+    levels = np.arange(2, k + 1)[:, None]
+    return (cf >= levels).mean(axis=-1) - (ref >= levels).mean(axis=-1)
 
 
 def total_variation(ref, cf, k: int) -> float:
@@ -48,12 +47,15 @@ def group_fairness(ref, cf) -> dict:
     """The two conditions are the groups, the reference answer is the label."""
     data = {"y_true": np.tile(ref, 2).astype(int), "y_pred": np.concatenate([ref, cf]).astype(int),
             "sensitive_features": np.repeat(["reference", "counterfactual"], len(ref))}
+    both = ref.any() and not ref.all()
     rate = MetricFrame(metrics=selection_rate, **data).by_group
+    odds = MetricFrame(metrics={"tpr": true_positive_rate, "fpr": false_positive_rate}, **data).by_group if both else None
     return {"effect_value": rate["counterfactual"] - rate["reference"],
             "rate_reference": rate["reference"], "rate_counterfactual": rate["counterfactual"],
             "rate_ratio": rate["counterfactual"] / rate["reference"] if rate["reference"] else np.nan,
             "equal_opportunity_difference": equal_opportunity_difference(**data) if ref.any() else np.nan,
-            "equalized_odds_difference": equalized_odds_difference(**data) if ref.any() and not ref.all() else np.nan}
+            "equalized_odds_difference": equalized_odds_difference(**data) if both else np.nan,
+            "average_odds_difference": (odds.loc["counterfactual"] - odds.loc["reference"]).mean() if both else np.nan}
 
 
 def transitions(ref, cf, categories: list) -> pd.DataFrame:

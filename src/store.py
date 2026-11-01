@@ -13,13 +13,14 @@ yaml.add_representer(str, _str, Dumper=yaml.SafeDumper)
 
 
 class ResultStore:
-    def __init__(self, root):
+    def __init__(self, root, analysis: str = ""):
         self.root = Path(root)
         self.manifest = self.root / "manifest.yaml"
         self.generations = self.root / "generations.jsonl"
-        self.results = self.root / "results.xlsx"
-        self.report = self.root / "report.pdf"
-        self.figures = self.root / "figures"
+        self.out = self.root / analysis
+        self.results = self.out / "results.xlsx"
+        self.report = self.out / "report.pdf"
+        self.figures = self.out / "figures"
 
     def create(self) -> None:
         self.root.mkdir(parents=True)
@@ -44,6 +45,7 @@ class ResultStore:
         self.generations.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in records), encoding="utf-8")
 
     def write_tables(self, tables: dict[str, pd.DataFrame]) -> None:
+        self.out.mkdir(exist_ok=True)
         with pd.ExcelWriter(self.results) as writer:
             for name, df in tables.items():
                 df.to_excel(writer, sheet_name=name, index=False)

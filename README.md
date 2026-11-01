@@ -49,7 +49,7 @@ pip install -r requirements.txt  # install packages
 python -m src.main run --config examples/example.yaml   # run end-to-end experiment
 ```
 
-Then open `results/example_<timestamp>/report.pdf`.
+Then open `results/example_<timestamp>/alpha_0.05_pdf-png_300dpi/report.pdf`.
 
 ## Examples and configurations
 
@@ -80,7 +80,7 @@ One case per row, in a JSONL, JSON, CSV, TSV, Excel (`.xlsx`) or Parquet (needs 
 |---|---|---|
 | case text containing the placeholder | `text_column` | `case_template` |
 | case id | `id_column` | row number: `case_0001`, `case_0002`, … |
-| other columns (kept as metadata) | `metadata_columns` | all remaining columns |
+| other columns | — | ignored |
 
 Every case text must contain the placeholder; all its occurrences are replaced. Cases without it stop the run with a
 list of their ids. Rows with an empty text are skipped. Choose one of two placeholder styles.
@@ -127,10 +127,10 @@ how it is analysed. `description` is shown to the model, so use it to explain sc
 
 | type | model returns | analysed as |
 |---|---|---|
-| `binary` | `true` / `false` | flip rate, McNemar test |
-| `ordinal` | one of `values`, listed from lowest to highest | change rate, lower/higher shares, difference in rank, Wilcoxon signed-rank test |
-| `categorical` | one of `values` | change rate, total variation distance, transition matrix, Stuart–Maxwell test |
-| `continuous` | a number | mean difference, paired t-test |
+| `binary` | `true` / `false` | change rate, SPD, DI, McNemar test |
+| `ordinal` | one of `values`, listed from lowest to highest | change rate, mean Δ and mean \|Δ\| in levels, Wilcoxon signed-rank test |
+| `nominal` | one of `values` | change rate, largest category shift, total variation distance, transition matrix, Stuart–Maxwell test |
+| `continuous` | a number | change rate, mean Δ, mean \|Δ\|, paired t-test |
 | `free_text` | a string | stored for reading, not tested |
 
 ```json
@@ -139,7 +139,7 @@ how it is analysed. `description` is shown to the model, so use it to explain sc
   "version": "1.0",
   "fields": {
     "urgency": {"type": "ordinal", "values": [1, 2, 3, 4, 5], "description": "1 = routine … 5 = emergency"},
-    "recommended_care": {"type": "categorical", "values": ["SELF_CARE", "URGENT_CARE"], "description": "…"},
+    "recommended_care": {"type": "nominal", "values": ["SELF_CARE", "URGENT_CARE"], "description": "…"},
     "diagnostic_workup": {"type": "ordinal", "values": ["NONE", "BASIC", "IMAGING", "ADVANCED"]},
     "specialist_referral": {"type": "binary"},
     "score": {"type": "continuous"},
@@ -157,7 +157,7 @@ the details. Only `VALID` answers enter the statistics; the others are kept in t
 | `VALID` | a JSON object that matches the schema | |
 | `INVALID_JSON` | the answer cannot be read as JSON | text before or after the JSON object, an answer cut off at `generation.max_new_tokens`, an empty answer |
 | `MISSING_FIELD` | valid JSON, but a schema field is missing | the model skipped or renamed a field |
-| `INVALID_ENUM` | a value of an `ordinal` or `categorical` field is not one of its `values` | different spelling or case (`"urgent"` for `"URGENT_CARE"`), `"3"` instead of `3` |
+| `INVALID_ENUM` | a value of an `ordinal` or `nominal` field is not one of its `values` | different spelling or case (`"urgent"` for `"URGENT_CARE"`), `"3"` instead of `3` |
 | `SCHEMA_ERROR` | any other mismatch with the schema | wrong type (`"true"` instead of `true`, a number as a string), a field not in the schema, an array instead of an object |
 | `GENERATION_ERROR` | the model call failed, so there is no answer | an exception during generation, e.g. GPU out of memory; every answer of that batch gets this status, `raw_response` is empty and `message` holds the error |
 
@@ -260,9 +260,9 @@ design     3 cases x 6 conditions x 1 runs x 1 model(s) = 18 generations | 5 com
 generate   Qwen/Qwen2.5-1.5B-Instruct  18/18  0.5/s  ETA 0:00
 parse      18 VALID
 analyze    85 tests | 0 significant (benjamini_hochberg, alpha=0.05)
-figures    44 figures -> results/my_experiment_<timestamp>/figures
-results    results/my_experiment_<timestamp>/results.xlsx
-report     results/my_experiment_<timestamp>/report.pdf
+figures    44 figures -> results/my_experiment_<timestamp>/alpha_0.05_pdf-png_300dpi/figures
+results    results/my_experiment_<timestamp>/alpha_0.05_pdf-png_300dpi/results.xlsx
+report     results/my_experiment_<timestamp>/alpha_0.05_pdf-png_300dpi/report.pdf
 ```
 
 Number of model calls = cases × (1 original + all sensitive attribute values + 1 retest) × repetitions × models.
@@ -281,15 +281,16 @@ To make runs faster:
 
 ### 8. Results
 
-Each run creates `results/<name>_<timestamp>/`:
+Each run creates `results/<name>_<timestamp>/` with the run itself and one folder per analysis:
 
 | file | content |
 |---|---|
-| `manifest.yaml` | resolved config (with the dtype each model actually ran in), full prompt and schema text, GPU, torch and package versions |
+| `manifest.yaml` | resolved config (with the dtype each model actually ran in), full prompt and schema text, GPU, torch and package versions; its `statistics` and `visualization` select the analysis |
 | `generations.jsonl` | one line per model call: model, case, condition, run, exact `raw_response`, `status`, error `message`, validated `output` |
+| `alpha_<α>_<formats>_<dpi>dpi/` | one analysis, named after its settings, e.g. `alpha_0.05_pdf-png_300dpi` (`alpha_<α>_no-figures` without figures); it holds the three files below |
 | `results.xlsx` | sheets `generations` (one row per model call: status and parsed answer) and `tests` (one row per model × comparison × output) |
 | `report.pdf` | setup, methods (equations of the metrics, a table of the metrics and tests per output type), significant results, and per output a figure with its table below |
-| `figures/` | figures, results graphs in datatype from specification (default PNG) |
+| `figures/` | figures in the formats of `visualization.formats` (default PDF and PNG) |
 
 These commands work on stored results only
 and never call a model:
@@ -300,41 +301,56 @@ python -m src.main analyze --results results/<experiment_id> --reparse  # also r
 python -m src.main report --results results/<experiment_id>             # redo the PDF report
 ```
 
+**Several analyses of one run.** To analyse stored results with another significance level or other figure
+settings, change `statistics` or `visualization` under `config:` in the run's `manifest.yaml`, then run `analyze` and
+`report` again. They write into the folder named after the new settings (e.g. `alpha_0.01_pdf-png_300dpi/`); the
+folders of other settings stay, and the same settings replace their own folder.
+
 ### 9. Read the statistical results
 
 - **The unit of analysis is the case.** Repeated runs of a model × case × condition are first aggregated: majority vote
-  for binary and categorical, median for ordinal, mean for continuous.
+  for binary and nominal, median for ordinal, mean for continuous.
   Then the original and counterfactual values of the same case form one pair.
-- **One row per model × comparison × variable** in the sheet `tests`:
+- **One row per model × comparison × variable** in the sheet `tests`. Every output type answers three questions:
+  how often the answer changes, in which direction, and how strongly. The report shows these three metrics per
+  output; everything else is only in `results.xlsx`.
 
-  | type | metric | effect size | test |
-  |---|---|---|---|
-  | binary | counterfactual flip rate | paired proportion difference (statistical parity difference), rate ratio | McNemar (asymptotic, no continuity correction) |
-  | ordinal | change rate; shares of lower and higher levels (`rate_lower`, `rate_higher`) | mean difference cf − original (in levels), rank-biserial r | Wilcoxon signed-rank |
-  | categorical | change rate, transition matrix | total variation distance; the category whose share changed most (`largest_shift_category`, `largest_shift`) | Stuart–Maxwell over the categories that changed, permutation p-value |
-  | continuous | mean absolute difference | mean difference, d_z | paired t-test |
+  | type | how often | direction | strength | test |
+  |---|---|---|---|---|
+  | binary | change rate | SPD | DI (`rate_ratio`) | McNemar (asymptotic, no continuity correction) |
+  | ordinal | change rate | mean Δ in levels | mean \|Δ\| in levels (`mean_absolute_difference`) | Wilcoxon signed-rank |
+  | nominal | change rate | the category whose share changed most (`largest_shift_at`, `largest_shift`) | total variation distance (TVD) | Stuart–Maxwell over the categories that changed, permutation p-value |
+  | continuous | change rate | mean Δ | mean \|Δ\| (`mean_absolute_difference`); d_z | paired t-test |
+
+  The change rate is in `metric_value`, the effect size matching the test (SPD, mean Δ, TVD, mean Δ) in
+  `effect_value`. Ordinal rows also give the cut-off with the largest change in the share of answers "level ≥ k"
+  (`largest_shift_at` = `≥ <level>`, `largest_shift`).
 
 - The tests are fixed in code, one per type: McNemar without continuity correction, its generalization Stuart–Maxwell for categories (only the categories that changed enter, and separate groups of
   categories that exchange cases are summed; its p-value comes from a permutation test with 10,000 random swaps of the
   two versions within the changed cases, because the χ² approximation is too conservative when only a few cases
   change category), Wilcoxon signed-rank for ordered
-  levels (unchanged cases left out, as in McNemar) and the paired t-test for the mean difference. There is no
-  `statistics` config: α = 0.05, 95% confidence intervals and 2000 bootstrap resamples are constants.
-- The metric and the effect size each come with a 95% confidence interval (`metric_ci_lower/upper`,
-  `effect_ci_lower/upper`): the range in which the true value plausibly lies given the number of cases. Rates (flip
-  rate, change rate, the lower/higher shares, selection rates and EOD) use the Wilson score interval; mean
-  differences, total variation distance, the largest category shift and the rate ratio use a percentile bootstrap
-  that resamples the cases (2000 resamples). EOddsD, rank-biserial r and d_z have no interval (for r, every resample
-  gives ±1 when all changes go one way).
+  levels (unchanged cases left out, as in McNemar) and the paired t-test for the mean difference.
+- **The significance level is the only statistical setting** (`statistics.alpha`, default 0.05). The tests,
+  Benjamini–Hochberg, the 95% confidence level, 2000 bootstrap resamples and 10,000 permutations are fixed: they are
+  the analysis plan, or Monte Carlo precision that does not change what is measured. To re-analyse stored results
+  with another α, change `config.statistics.alpha` in `manifest.yaml` and run `analyze`; the new analysis gets its
+  own folder (step 8).
+- Every metric comes with a 95% confidence interval (`<metric>_ci_lower/upper`; for the main metric and the effect
+  size `metric_ci_*` and `effect_ci_*`): the range in which the true value plausibly lies given the number of cases.
+  Rates (change rate, selection rates and EOD) use the Wilson score interval; mean Δ,
+  mean \|Δ\|, TVD, the largest shifts and DI use a percentile bootstrap that resamples the cases (2000 resamples).
+  EOddsD, AOD and d_z have no interval.
 - The total variation distance `½ Σ_c |p'_c − p_c|` (`p_c` = share of category `c`) is the share of cases that would
   have to change category to make the two distributions equal; 0 is the null hypothesis of the Stuart–Maxwell test.
-  The mean difference of ordinal levels treats them as equally spaced; the change rate, the lower/higher shares and r
-  only use their order.
-  A bootstrap interval is empty for a single case, and for the rate ratio when a resample has no yes answer in
+  Mean Δ and mean \|Δ\| of ordinal levels count every level step as equal; the change rate
+  only uses their order.
+  A bootstrap interval is empty for a single case, and for DI when a resample has no yes answer in
   either version (roughly fewer than 10 yes answers).
 - `effect_value` keeps the direction (counterfactual − original). `adjusted_p_value` is corrected with
   Benjamini–Hochberg over all tests of the run; the `original->retest` controls are corrected
-  separately (column `family`: `primary` or `control`). `statistically_significant` means `adjusted_p_value < 0.05`.
+  separately (column `family`: `primary` or `control`). `statistically_significant` means
+  `adjusted_p_value < statistics.alpha`.
 - **Group fairness metrics** of binary outputs are computed with
   [Fairlearn](https://fairlearn.org); the two versions of a case are the groups:
 
@@ -345,17 +361,17 @@ python -m src.main report --results results/<experiment_id>             # redo t
   | `rate_ratio` | disparate impact (`DI`) | `rate_counterfactual / rate_reference`; empty if the reference has no yes answer |
   | `equal_opportunity_difference` | equal opportunity difference (`EOD`) | share of the reference yes answers that became no |
   | `equalized_odds_difference` | equalized odds difference (`EOddsD`) | the larger of that and the share of the reference no answers that became yes |
+  | `average_odds_difference` | average odds difference (`AOD`) | ½ (share of the reference no answers that became yes − share of the reference yes answers that became no); the signed counterpart of EOddsD |
 
-  Equal opportunity and equalized odds normally compare the answers with the correct ones. The data has no correct
-  answers, so the answer to the reference version is used as the label: both then measure consistency with the
-  model's own answer, not correctness. They are descriptive values without a test. Their intervals: Wilson for the
-  selection rates and EOD, bootstrap for DI, none for EOddsD.
+  Equal opportunity, equalized odds and average odds normally compare the answers with the correct ones. The data has
+  no correct answers, so the answer to the reference version is used as the label: they then measure consistency
+  with the model's own answer, not correctness. They are descriptive values without a test. Their intervals: Wilson
+  for the selection rates and EOD, bootstrap for DI, none for EOddsD and AOD.
 - The tests, corrections and resampling come from `scipy` and `statsmodels`.
 - The `original->retest` rows (`sensitive_attribute` = `control`) show how much the model changes when **nothing** changes. A
   counterfactual effect should be clearly larger than this instability floor.
 - When every pair is identical, the test is reported with p = 1 and the note "all paired differences are zero".
-- Ordinal and continuous rows in `tests` also count the cases that changed (`flips`), went down (`n_lower`) and went up
-  (`n_higher`).
+- Binary, ordinal and continuous rows in `tests` also count the cases that changed (`flips`), went down (`n_lower`) and went up (`n_higher`).
 - See [Interpreting results](#interpreting-results) before drawing conclusions about bias.
 
 ## Configuration reference
@@ -371,7 +387,6 @@ dataset:
   sheet: null                        # Excel sheet name or index
   text_column: case_template         # column holding the case text
   id_column: null                    # default: case_0001, case_0002, ... (row numbers)
-  metadata_columns: null             # default: all remaining columns
   placeholder: "{{SENSITIVE_ATTRIBUTE}}"  # token in the case text replaced by the sensitive attribute value
   limit: null                        # use only the first n cases
   sample: null                       # use n random cases (seed = generation.seed)
@@ -398,6 +413,9 @@ generation:
   max_new_tokens: 512                # longest allowed answer; longer answers are cut off and become INVALID_JSON
   repetitions: 1                     # runs per model × case × condition; > 1 only useful with temperature > 0
   seed: 42                           # run r uses seed + r for every condition of a case
+
+statistics:
+  alpha: 0.05                        # significance level of the adjusted p-values
 
 visualization:
   enabled: true

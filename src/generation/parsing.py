@@ -9,7 +9,7 @@ ERROR_STATUS = {"missing": "MISSING_FIELD", "literal_error": "INVALID_ENUM"}
 ANNOTATIONS = {
     "binary": lambda f: bool,
     "ordinal": lambda f: Literal[tuple(f["values"])],
-    "categorical": lambda f: Literal[tuple(f["values"])],
+    "nominal": lambda f: Literal[tuple(f["values"])],
     "continuous": lambda f: float,
     "free_text": lambda f: str,
 }

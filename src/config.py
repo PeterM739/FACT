@@ -15,7 +15,6 @@ class DatasetConfig(Strict):
     sheet: str | int | None = None
     text_column: str = "case_template"
     id_column: str | None = None
-    metadata_columns: list[str] | None = None
     placeholder: str = "{{SENSITIVE_ATTRIBUTE}}"
     limit: int | None = None
     sample: int | None = None
@@ -68,6 +67,10 @@ class Generation(Strict):
     seed: int = 42
 
 
+class Statistics(Strict):
+    alpha: float = Field(0.05, gt=0, lt=1)
+
+
 class Visualization(Strict):
     enabled: bool = True
     formats: list[str] = ["pdf", "png"]
@@ -83,8 +86,14 @@ class Config(Strict):
     original_value: str = ""
     prompts: Prompts = Prompts()
     generation: Generation = Generation()
+    statistics: Statistics = Statistics()
     visualization: Visualization = Visualization()
     results_dir: str = "results"
+
+    @property
+    def analysis(self) -> str:
+        v = self.visualization
+        return f"alpha_{self.statistics.alpha:g}_" + (f"{'-'.join(v.formats)}_{v.dpi}dpi" if v.enabled else "no-figures")
 
 
 def load_config(path) -> Config:

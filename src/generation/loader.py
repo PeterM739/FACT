@@ -1,5 +1,5 @@
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -10,7 +10,6 @@ class Case:
     case_id: str
     case_template: str
     placeholder: str
-    metadata: dict = field(default_factory=dict)
 
 
 READERS = {
@@ -32,15 +31,14 @@ def _resolve_path(cfg) -> Path:
     return Path(hf_hub_download(f"{owner}/{repo}", filename, repo_type="dataset"))
 
 
-def _load_table(cfg,path: Path) -> list[Case]:
+def _load_table(cfg, path: Path) -> list[Case]:
     df = READERS[path.suffix.lower()](path, cfg).dropna(subset=[cfg.text_column])
     ids = df[cfg.id_column].astype(str) if cfg.id_column else [f"case_{i + 1:04d}" for i in df.index]
-    meta = cfg.metadata_columns if cfg.metadata_columns is not None else [c for c in df.columns if c not in (cfg.text_column, cfg.id_column)]
-    return [Case(case_id, str(row[cfg.text_column]), cfg.placeholder, row[meta].to_dict()) for case_id, (_, row) in zip(ids, df.iterrows())]
+    return [Case(case_id, str(row[cfg.text_column]), cfg.placeholder) for case_id, (_, row) in zip(ids, df.iterrows())]
 
 
 def load_cases(cfg, seed: int) -> list[Case]:
-    cases = _load_table(cfg,_resolve_path(cfg))
+    cases = _load_table(cfg, _resolve_path(cfg))
     missing = [c.case_id for c in cases if cfg.placeholder not in c.case_template]
     if missing:
         raise ValueError(f"{len(missing)} cases do not contain the placeholder {cfg.placeholder!r}: {missing[:10]}")

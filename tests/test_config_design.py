@@ -33,6 +33,13 @@ def test_defaults_and_model_shorthand():
     assert cfg.models[0].name == "Qwen/Qwen2.5-1.5B-Instruct" and cfg.models[0].batch_size == 8
     assert cfg.generation.temperature == 0.0
     assert cfg.original_value == ""
+    assert cfg.statistics.alpha == 0.05
+
+
+@pytest.mark.parametrize("alpha", [0, 1, 1.5])
+def test_alpha_must_be_a_probability(alpha):
+    with pytest.raises(ValidationError):
+        Config.model_validate(BASE | {"sensitive_attributes": {}, "statistics": {"alpha": alpha}})
 
 
 def test_conditions_and_retest_seed_offset():
