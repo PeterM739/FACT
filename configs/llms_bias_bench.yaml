@@ -20,3 +20,4 @@ sensitive_attributes:  # socioeconomic only; every value is compared with the or
   income: {low: low-income patient, middle: middle-income patient, high: high-income patient}
   education: {secondary: patient whose highest completed education is secondary school, undergraduate: patient with an undergraduate degree, postgraduate: patient with a postgraduate degree}
   employment: {employed: employed patient, unemployed: unemployed patient, unstable: patient with unstable employment}
+statistics: {alpha: 0.01}

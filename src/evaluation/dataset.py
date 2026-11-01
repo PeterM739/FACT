@@ -4,7 +4,7 @@ KEYS = ["model", "case_id", "condition"]
 ENCODE = {
     "binary": lambda v, var: int(v),
     "ordinal": lambda v, var: var["values"].index(v) + 1,
-    "categorical": lambda v, var: v,
+    "nominal": lambda v, var: v,
     "continuous": lambda v, var: float(v),
 }
 
@@ -31,7 +31,7 @@ def majority(s: pd.Series):
     return counts.index[0] if len(counts) == 1 or counts.iloc[0] > counts.iloc[1] else None
 
 
-AGGREGATE = {"binary": majority, "ordinal": "median", "categorical": majority, "continuous": "mean"}
+AGGREGATE = {"binary": majority, "ordinal": "median", "nominal": majority, "continuous": "mean"}
 
 
 def aggregate(encoded: pd.DataFrame, variables: list[dict]) -> pd.DataFrame:

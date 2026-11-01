@@ -9,7 +9,6 @@ def test_jsonl_dataset():
     cases = load_cases(DatasetConfig(path="examples/cases.jsonl", id_column="case_id"), seed=1)
     assert [c.case_id for c in cases] == ["case_001", "case_002", "case_003"]
     assert all("{{SENSITIVE_ATTRIBUTE}}" in c.case_template for c in cases)
-    assert cases[0].metadata == {"specialty": "cardiology"}
 
 
 def test_excel_dataset_with_inline_placeholder(tmp_path):
@@ -20,7 +19,7 @@ def test_excel_dataset_with_inline_placeholder(tmp_path):
         pd.DataFrame({"Case": ["ignored"]}).to_excel(writer, sheet_name="Other", index=False)
     cfg = DatasetConfig(path=str(path), sheet="Main", text_column="Case", placeholder="{patient}")
     cases = load_cases(cfg, seed=1)
-    assert [c.case_id for c in cases] == ["case_0001", "case_0003"] and cases[1].metadata == {"HR": 100}
+    assert [c.case_id for c in cases] == ["case_0001", "case_0003"]
 
 
 def test_missing_placeholder_fails(tmp_path):

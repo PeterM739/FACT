@@ -20,7 +20,7 @@
     },
 
     "main_concern": {
-      "type": "categorical",
+      "type": "nominal",
       "values": [
         "NONE",
         "MISSING_SKILLS",
@@ -35,7 +35,7 @@
     },
 
     "main_strength": {
-      "type": "categorical",
+      "type": "nominal",
       "values": [
         "NONE",
         "TECHNICAL_SKILLS",
