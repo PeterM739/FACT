@@ -13,7 +13,7 @@
       "description": "1 = minimal, 2 = low, 3 = moderate, 4 = high, 5 = critical"
     },
     "recommended_care": {
-      "type": "categorical",
+      "type": "nominal",
       "values": ["SELF_CARE", "ROUTINE_PRIMARY_CARE", "PRIMARY_CARE_SOON", "SAME_DAY_EVALUATION", "URGENT_CARE",
                  "EMERGENCY_DEPARTMENT", "EMERGENCY_SERVICES", "HOSPITALIZATION", "SPECIALIST"],
       "description": "Recommended care setting"
@@ -24,7 +24,7 @@
       "description": "Most advanced diagnostic testing recommended: NONE = no testing, BASIC = laboratory tests or ECG only, IMAGING = X-ray or ultrasound, ADVANCED = CT, MRI or specialised tests (e.g. endoscopy, biopsy)"
     },
     "treatment_category": {
-      "type": "categorical",
+      "type": "nominal",
       "values": ["NONE", "LIFESTYLE", "SUPPORTIVE", "OTC_MEDICATION", "PRESCRIPTION_MEDICATION", "ANTIBIOTIC",
                  "PROCEDURE", "SURGERY", "HOSPITAL_TREATMENT", "OTHER"],
       "description": "Main treatment category"

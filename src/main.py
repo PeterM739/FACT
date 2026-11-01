@@ -11,7 +11,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from src.config import Config, load_config
-from src.evaluation.analyze import ALPHA, run_tests
+from src.evaluation.analyze import run_tests
 from src.evaluation.dataset import aggregate, analysis_dataset, encode, make_pairs, variables
 from src.generation.design import comparisons, conditions
 from src.generation.loader import load_cases
@@ -72,6 +72,7 @@ def run_generations(ctx: Context) -> None:
 def load(ctx: Context) -> None:
     ctx.manifest = ctx.store.read_manifest()
     ctx.config = Config.model_validate(ctx.manifest["config"])
+    ctx.store = ResultStore(ctx.store.root, ctx.config.analysis)
 
 
 def parse(ctx: Context) -> None:
@@ -96,7 +97,7 @@ def analyze(ctx: Context) -> None:
     tests = run_tests(ctx.pairs, vars_, cfg, df["case_id"].nunique())
     ctx.tables = {"generations": df, "tests": tests}
     _say("analyze", f"{tests['p_value'].notna().sum()} tests | {int(tests['statistically_significant'].sum())} significant "
-                   f"(benjamini_hochberg, alpha={ALPHA})")
+                   f"(benjamini_hochberg, alpha={cfg.statistics.alpha})")
 
 
 def figures(ctx: Context) -> None:
@@ -119,7 +120,7 @@ def report(ctx: Context) -> None:
 PIPELINES = {
     "run": [design, run_generations, parse, analyze, figures, save, report],
     "analyze": [load, parse, analyze, figures, save],
-    "report": [report],
+    "report": [load, report],
 }
 
 
@@ -131,13 +132,13 @@ def main(argv=None) -> None:
     analyze_ = sub.add_parser("analyze", help="statistics and figures from stored results")
     analyze_.add_argument("--results", required=True)
     analyze_.add_argument("--reparse", action="store_true")
-    report_ = sub.add_parser("report", help="HTML report from stored analysis")
+    report_ = sub.add_parser("report", help="PDF report from stored analysis")
     report_.add_argument("--results", required=True)
     args = parser.parse_args(argv)
 
     if args.command == "run":
         cfg = load_config(args.config)
-        ctx = Context(ResultStore(Path(cfg.results_dir) / f"{cfg.name}_{datetime.now():%Y%m%d_%H%M%S}"), cfg)
+        ctx = Context(ResultStore(Path(cfg.results_dir) / f"{cfg.name}_{datetime.now():%Y%m%d_%H%M%S}", cfg.analysis), cfg)
     else:
         ctx = Context(ResultStore(args.results), reparse=getattr(args, "reparse", False))
     for stage in PIPELINES[args.command]:

@@ -4,11 +4,13 @@ import pytest
 from fairlearn.metrics import demographic_parity_difference, demographic_parity_ratio
 from scipy import stats
 
-from src.evaluation.analyze import analyze_binary, analyze_categorical, analyze_ordinal
+from src.evaluation.analyze import analyze_binary, analyze_nominal, analyze_continuous, analyze_ordinal
 from src.evaluation.dataset import majority
-from src.evaluation.metrics import (bootstrap, category_shift, rank_biserial, rate_ratio, total_variation,
+from src.evaluation.metrics import (bootstrap, category_shift, cutoff_shift, rate_ratio, total_variation,
                                     transitions, wilson)
 from src.evaluation.statistical_tests import adjust, mcnemar, paired_t, stuart_maxwell, wilcoxon
+
+LEVELS = {"values": [1, 2, 3, 4, 5]}
 
 
 def test_majority():
@@ -26,9 +28,8 @@ def test_wilson_and_bootstrap():
     assert np.isnan(bootstrap((x[:1],), np.mean, seed=1)).all()
 
 
-def test_rank_biserial_and_transitions():
-    assert rank_biserial(np.array([1.0, 2.0, -1.0, 0.0])) == pytest.approx(0.5)
-    tr = transitions(np.array(["A", "A", "B"]), np.array(["A", "B", "B"]), ["A", "B", "C"])
+def test_transitions():
+    tr =transitions(np.array(["A", "A", "B"]), np.array(["A", "B", "B"]), ["A", "B", "C"])
     assert tr["count"].sum() == 3 and len(tr) == 9
     assert tr[tr["original"] == "A"]["row_pct"].sum() == pytest.approx(100)
 
@@ -80,8 +81,11 @@ def test_adjust_is_benjamini_hochberg():
 def test_analyzers_report_effects_and_cis():
     ref, cf = np.array([1, 1, 0, 1, 0.0]), np.array([0, 1, 0, 0, 0.0])
     b = analyze_binary(ref, cf, {}, 0)
-    assert b["metric_value"] == 0.4 and b["effect_value"] == pytest.approx(-0.4) and b["n10"] == 2
+    assert b["metric"] == "change_rate" and b["metric_value"] == 0.4 and b["n_lower"] == 2 and b["n_higher"] == 0
+    assert b["effect_value"] == pytest.approx(-0.4) == (b["n_higher"] - b["n_lower"]) / 5
     assert b["metric_ci_lower"] <= 0.4 <= b["metric_ci_upper"] and b["test"] == "mcnemar"
+    assert (b["metric_ci_lower"], b["metric_ci_upper"]) == wilson(2, 5)
+    assert b["average_odds_difference"] == pytest.approx(0.5 * (0 / 2 - 2 / 3))
     assert (b["rate_reference"], b["rate_counterfactual"]) == pytest.approx((0.6, 0.2))
     assert b["rate_ratio"] == pytest.approx(1 / 3) == rate_ratio(ref, cf)
     assert b["equal_opportunity_difference"] == pytest.approx(2 / 3) == b["equalized_odds_difference"]
@@ -91,21 +95,32 @@ def test_analyzers_report_effects_and_cis():
     assert demographic_parity_difference(**groups) == pytest.approx(-b["effect_value"])
     assert demographic_parity_ratio(**groups) == pytest.approx(b["rate_ratio"])
     assert np.isnan(analyze_binary(np.zeros(5), cf, {}, 0)["rate_ratio"])
-    o = analyze_ordinal(np.array([3, 3, 2, 4.0]), np.array([2, 3, 1, 2.0]), {}, 0)
+    o = analyze_ordinal(np.array([3, 3, 2, 4.0]), np.array([2, 3, 1, 2.0]), LEVELS, 0)
     assert o["metric"] == "change_rate" and o["metric_value"] == 0.75 and o["effect_value"] == -1.0
-    assert (o["rate_lower"], o["rate_higher"]) == (0.75, 0.0) and o["rate_lower_ci_upper"] < 1
-    assert o["rank_biserial"] == -1.0
+    assert o["mean_absolute_difference"] == 1.0
+    assert o["largest_shift_at"] == "≥ 3" and o["largest_shift"] == -0.5
     assert o["effect_ci_upper"] <= 0 and o["test"] == "wilcoxon_signed_rank"
     assert o["flips"] == 3 and o["n_lower"] == 3 and o["n_higher"] == 0
-    c = analyze_categorical(np.array(["A", "B", "A"]), np.array(["A", "A", "A"]), {"values": ["A", "B", "C"]}, 0)
+    c = analyze_nominal(np.array(["A", "B", "A"]), np.array(["A", "A", "A"]), {"values": ["A", "B", "C"]}, 0)
     assert c["metric_value"] == pytest.approx(1 / 3) and c["test"] == "stuart_maxwell"
     assert c["effect_size"] == "total_variation_distance" and c["effect_value"] == pytest.approx(1 / 3)
-    assert c["largest_shift_category"] == "A" and c["largest_shift"] == pytest.approx(1 / 3)
+    assert c["largest_shift_at"] == "A" and c["largest_shift"] == pytest.approx(1 / 3)
+    t = analyze_continuous(np.array([1, 2, 3, 4.0]), np.array([1, 3, 1, 4.0]), {}, 0)
+    assert t["metric"] == "change_rate" and t["metric_value"] == 0.5 and (t["n_lower"], t["n_higher"]) == (1, 1)
+    assert t["mean_absolute_difference"] == 0.75 and t["effect_value"] == -0.25 and t["test"] == "paired_t_test"
+    assert t["d_z"] == pytest.approx(-0.25 / np.std([0, 1, -2, 0], ddof=1))
+
+
+def test_cutoff_shifts_sum_to_mean_level_difference():
+    rng = np.random.default_rng(0)
+    ref, cf = rng.integers(1, 6, 50), rng.integers(1, 6, 50)
+    assert cutoff_shift(ref, cf, 5).sum() == pytest.approx((cf - ref).mean())
 
 
 def test_ordinal_half_levels_from_median_of_runs():
-    o = analyze_ordinal(np.array([3, 3, 2, 4.0]), np.array([2.5, 3, 2.5, 4.0]), {}, 0)
-    assert o["metric_value"] == 0.5 and (o["rate_lower"], o["rate_higher"]) == (0.25, 0.25)
+    o = analyze_ordinal(np.array([3, 3, 2, 4.0]), np.array([2.5, 3, 2.5, 4.0]), LEVELS, 0)
+    assert o["metric_value"] == 0.5 and (o["n_lower"], o["n_higher"]) == (1, 1)
+    assert o["largest_shift_at"] == "≥ 3" and o["largest_shift"] == -0.25
 
 
 def test_total_variation_and_category_shift():
@@ -115,9 +130,9 @@ def test_total_variation_and_category_shift():
     assert total_variation(ref, cf, 3) == pytest.approx(3 / 7)
     ref2, cf2 = codes("AAAB"), codes("ABBB")
     assert total_variation(ref2, cf2, 2) == pytest.approx(abs(cf2.mean() - ref2.mean()))  # two categories: |SPD|
-    swap = analyze_categorical(np.array(["A", "B", "C"]), np.array(["B", "A", "C"]), {"values": ["A", "B", "C"]}, 0)
+    swap = analyze_nominal(np.array(["A", "B", "C"]), np.array(["B", "A", "C"]), {"values": ["A", "B", "C"]}, 0)
     assert swap["metric_value"] == pytest.approx(2 / 3) and swap["effect_value"] == 0
-    assert swap["largest_shift_category"] is None and swap["largest_shift"] is None
+    assert swap["largest_shift_at"] is None and swap["largest_shift"] is None
 
 
 def test_wilcoxon_on_one_level_changes_equals_mcnemar():
