@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -83,9 +84,9 @@ def _outputs(store, tests: pd.DataFrame, alpha: float) -> tuple[list, dict]:
             overview.append({"name": models[key], "figure": path})
         elif key in by_variable:
             t = by_variable[key]
-            outputs[key] = {"type": p.parent.name, "name": pretty(t["variable"].iloc[0]), "figure": path, "table": _output_table(t, alpha), "transitions": None}
-        elif key.removesuffix("_transitions") in outputs:
-            outputs[key.removesuffix("_transitions")]["transitions"] = path
+            outputs[key] = {"type": p.parent.name, "name": pretty(t["variable"].iloc[0]), "figure": path, "table": _output_table(t, alpha), "transitions": []}
+        elif (part := re.fullmatch(r"(.+)_transitions(_\d+)?", key)) and part[1] in outputs:
+            outputs[part[1]]["transitions"].append(path)
     sections = {}
     for o in outputs.values():
         sections.setdefault(o.pop("type"), []).append(o)
@@ -98,11 +99,11 @@ def report_data(store) -> dict:
     cfg, gen = m["config"], m["config"]["generation"]
     valid = (g["status"] == "VALID").groupby(g["model"]).mean()
     models = pd.DataFrame([{"model": s["name"], "dtype": s["dtype"], "quantization": s["quantization"] or "none",
-                            "GPU": m["environment"].get("gpu"), "valid outputs": f"{valid.get(s['name'], float('nan')):.3f}"}
+                            "GPU": m["environment"].get("gpu"), "valid outputs": f"{valid.get(s['name'], float('nan')):.1%}"}
                            for s in cfg["models"]])
     attributes = pd.DataFrame([(a, v, text) for a, spec in cfg["sensitive_attributes"].items() for v, text in spec["values"].items()], columns=["sensitive attribute", "value", "inserted text"])
     attributes.loc[attributes["sensitive attribute"].duplicated(), "sensitive attribute"] = ""
-    fields = pd.DataFrame([(n, f["type"], ", ".join(map(str, f.get("values", [])))) for n, f in m["schema"]["fields"].items()], columns=["field", "type", "values"])
+    fields = pd.DataFrame([(n, f["type"], ", ".join(map(str, f.get("values", []))), f.get("description", "")) for n, f in m["schema"]["fields"].items()], columns=["field", "type", "values", "description"])
     alpha = Config.model_validate(cfg).statistics.alpha
     overview, sections = _outputs(store, tests, alpha)
     return {
@@ -111,7 +112,7 @@ def report_data(store) -> dict:
         "generation": {k: _text(gen[k]) for k in ("repetitions", "temperature", "max_new_tokens")},
         "counts": ", ".join(f"{k} {v}" for k, v in g["status"].value_counts().items()), "generations": len(g),
         "schema": f"{m['schema']['name']} v{m['schema']['version']}",
-        "models": _table(models, 5), "sensitive_attributes": _table(attributes, 3), "fields": _table(fields, 3),
+        "models": _table(models, 5), "sensitive_attributes": _table(attributes, 3), "fields": _table(fields, 4),
         "statistics": {"alpha": _text(alpha), "level": f"{LEVEL:.0%}", "bootstrap": f"{RESAMPLES:,}",
                        "permutations": f"{PERMUTATIONS:,}",
                        "stars": ", ".join(f"{'*' * i} < {t:g}" for i, t in enumerate(star_levels(alpha), 1))},

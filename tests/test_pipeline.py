@@ -88,7 +88,7 @@ def test_figures_follow_data_types_and_models(synthetic_run):
 
     data = report_data(store)
     outputs = [o for s in data["sections"].values() for o in s]
-    embedded = [f["figure"] for f in data["overview"]] + [o[k] for o in outputs for k in ("figure", "transitions") if o[k]]
+    embedded = [f["figure"] for f in data["overview"]] + [f for o in outputs for f in [o["figure"], *o["transitions"]]]
     assert all(f.endswith(".pdf") for f in embedded) and {name(out / f.lstrip("/")) for f in embedded} == files
     columns = {o["name"]: o["table"]["columns"] for o in outputs}
     assert columns["specialist referral"] == ["comparison", "n", "change rate", "SPD", "DI", "adj. p"]
@@ -103,3 +103,5 @@ def test_figures_follow_data_types_and_models(synthetic_run):
     assert "<0.001 ***" in cells and not any("%" in c for c in cells)
     assert "risk level" in data["unchanged"]
     assert data["statistics"]["stars"] == "* < 0.05, ** < 0.01, *** < 0.001"
+    assert [row[-1] for row in data["models"]["groups"][0]["rows"]] == ["100.0%", "100.0%"]
+    assert data["fields"]["columns"] == ["field", "type", "values", "description"]
