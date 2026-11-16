@@ -327,9 +327,10 @@ folders of other settings stay, and the same settings replace their own folder.
   (`largest_shift_at` = `≥ <level>`, `largest_shift`).
 
 - The tests are fixed in code, one per type: McNemar without continuity correction, its generalization Stuart–Maxwell for categories (only the categories that changed enter, and separate groups of
-  categories that exchange cases are summed; its p-value comes from a permutation test with 10,000 random swaps of the
-  two versions within the changed cases, because the χ² approximation is too conservative when only a few cases
-  change category), Wilcoxon signed-rank for ordered
+  categories that exchange cases are summed; its p-value comes from a permutation test that swaps the two versions
+  within the m changed cases, over all 2^m swaps when 2^m ≤ 10,000 (up to 13 changed cases), otherwise over 10,000
+  random swaps, because the χ² approximation is too conservative when only a few cases change category), Wilcoxon
+  signed-rank for ordered
   levels (unchanged cases left out, as in McNemar) and the paired t-test for the mean difference.
 - **The significance level is the only statistical setting** (`statistics.alpha`, default 0.05). The tests,
   Benjamini–Hochberg, the 95% confidence level, 2000 bootstrap resamples and 10,000 permutations are fixed: they are
