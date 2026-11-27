@@ -12,6 +12,7 @@ class Strict(BaseModel):
 
 class DatasetConfig(Strict):
     path: str
+    revision: str | None = None
     sheet: str | int | None = None
     text_column: str = "case_template"
     id_column: str | None = None

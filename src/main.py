@@ -16,6 +16,7 @@ from src.evaluation.dataset import aggregate, analysis_dataset, encode, make_pai
 from src.generation.design import comparisons, conditions
 from src.generation.loader import load_cases
 from src.generation.parsing import output_model, parse_response
+from src.generation.prompts import check_prompts
 from src.generation.runner import generate_outputs
 from src.reporting.figures import FigureData, make_figures
 from src.reporting.report import write_report
@@ -56,6 +57,7 @@ def design(ctx: Context) -> None:
     cfg, store = ctx.config, ctx.store
     ctx.cases = load_cases(cfg.dataset, cfg.generation.seed)
     ctx.manifest = new_manifest(cfg, store.root.name)
+    check_prompts(**ctx.manifest["prompts"])
     store.create()
     store.write_manifest(ctx.manifest)
     n_cond, runs, n_models = len(conditions(cfg)), cfg.generation.repetitions, len(cfg.models)

@@ -3,7 +3,7 @@ import json
 import pytest
 
 from src.generation.parsing import parse_response, schema_text
-from src.generation.prompts import build_messages, render
+from src.generation.prompts import build_messages, check_prompts, render
 
 
 def _answer(**changes):
@@ -17,6 +17,16 @@ def test_render_is_strict():
     assert render("Case: {{CASE}}", CASE="x") == "Case: x"
     with pytest.raises(KeyError, match="SCHEMA"):
         render("{{CASE}} {{SCHEMA}}", CASE="x")
+
+
+def test_check_prompts():
+    check_prompts("Schema: {{SCHEMA}}", "Case: {{CASE}}")
+    with pytest.raises(ValueError, match=r"missing \['SCHEMA'\]"):
+        check_prompts("", "{{CASE}}")
+    with pytest.raises(ValueError, match=r"unknown \['FOO'\]"):
+        check_prompts("{{FOO}}", "{{CASE}} {{SCHEMA}}")
+    with pytest.raises(ValueError, match=r"\{\{CASE\}\} must be in the user prompt"):
+        check_prompts("{{CASE}}", "{{SCHEMA}}")
 
 
 def test_messages(schema):

@@ -42,6 +42,14 @@ def test_end_to_end_with_small_model(make_config, run_dir, monkeypatch):
     assert store.report.read_bytes().startswith(b"%PDF")
 
 
+def test_prompt_without_schema_stops_before_the_run(make_config, tmp_path, monkeypatch):
+    (tmp_path / "user.txt").write_text("Case: {{CASE}}", encoding="utf-8")
+    monkeypatch.setattr("src.generation.runner.build_model", lambda spec: pytest.fail("no model may be loaded"))
+    with pytest.raises(ValueError, match="SCHEMA"):
+        main(["run", "--config", str(make_config(prompts={"user": str(tmp_path / "user.txt")}))])
+    assert not (tmp_path / "results").exists()
+
+
 def test_injected_effect_is_detected_and_null_is_not(synthetic_run):
     out = synthetic_run(effect=EFFECT, invalid_every=37)
     main(["analyze", "--results", str(out), "--reparse"])
