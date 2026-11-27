@@ -10,6 +10,15 @@ def render(template: str, **values) -> str:
     return PLACEHOLDER.sub(lambda m: str(values[m.group(1)]), template)
 
 
+def check_prompts(system: str, user: str) -> None:
+    found = set(PLACEHOLDER.findall(f"{system}\n{user}"))
+    missing, unknown = {"CASE", "SCHEMA"} - found, found - {"CASE", "SCHEMA"}
+    if missing or unknown:
+        raise ValueError(f"prompt placeholders: missing {sorted(missing)}, unknown {sorted(unknown)}")
+    if "CASE" not in PLACEHOLDER.findall(user):
+        raise ValueError("prompt placeholders: {{CASE}} must be in the user prompt")
+
+
 def build_messages(system_prompt: str, user_prompt: str, case_text: str, schema_text: str) -> list[dict]:
     values = {"CASE": case_text, "SCHEMA": schema_text}
     messages = [{"role": "user", "content": render(user_prompt, **values)}]

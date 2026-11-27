@@ -3,6 +3,7 @@
 name: llms_bias_bench
 dataset:
   path: hf://datasets/mamuto11/LLMs_Bias_Bench/Data_Pub.xlsx
+  revision: fb5486b658d2be3792e92bbab47221dc71090326
   sheet: First 255
   text_column: Case
   placeholder: "{patient}"

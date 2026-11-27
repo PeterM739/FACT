@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pandas as pd
 import pytest
 
@@ -32,10 +34,13 @@ def test_missing_placeholder_fails(tmp_path):
 def test_huggingface_path(monkeypatch, tmp_path):
     local = tmp_path / "file.csv"
     pd.DataFrame({"case_template": [f"case {i} {{{{SENSITIVE_ATTRIBUTE}}}}" for i in range(10)]}).to_csv(local, index=False)
-    calls = []
+    calls, revisions = [], []
     monkeypatch.setattr("huggingface_hub.hf_hub_download", lambda *a, **k: calls.append((a, k)) or str(local))
+    monkeypatch.setattr("huggingface_hub.dataset_info",
+                        lambda repo, revision: revisions.append(revision) or SimpleNamespace(sha="abc123"))
     cfg = DatasetConfig(path="hf://datasets/owner/repo/dir/file.csv", sample=4, limit=3)
     cases = load_cases(cfg, seed=7)
-    assert calls == [(("owner/repo", "dir/file.csv"), {"repo_type": "dataset"})]
-    assert len(cases) == 3
+    assert calls == [(("owner/repo", "dir/file.csv"), {"repo_type": "dataset", "revision": "abc123"})]
+    assert cfg.revision == "abc123" and len(cases) == 3
     assert [c.case_id for c in cases] == [c.case_id for c in load_cases(cfg, seed=7)]
+    assert revisions == [None, "abc123"]

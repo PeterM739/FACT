@@ -113,11 +113,14 @@ sensitive_attributes:
   insurance: {uninsured: patient without health insurance}
 ```
 
-Files on Hugging Face are read directly (latest version) and cached:
+Files on Hugging Face are read directly and cached. `revision` (a branch, tag or full commit hash) defaults to the
+latest version, the manifest always records the commit that was read. Pin the commit so that the same case ids (row
+numbers by default) keep pointing to the same cases when the dataset changes:
 
 ```yaml
 dataset:
   path: hf://datasets/<owner>/<repo>/<file>
+  revision: <commit hash>
 ```
 
 ### 2. Define the structured output (schema)
@@ -185,7 +188,8 @@ Return the result as a single JSON object that conforms to this JSON schema:
 {{SCHEMA}}
 ```
 
-Ask explicitly for the JSON object only. An unknown `{{…}}` placeholder stops the run, and an empty `system.txt` sends
+Ask explicitly for the JSON object only. `{{CASE}}` must appear in `user.txt`; `{{SCHEMA}}` may be in either file. A
+missing, misplaced or unknown `{{…}}` placeholder stops the run before the model is loaded. An empty `system.txt` sends
 no system message.
 
 ### 4. Define the sensitive attributes
@@ -285,7 +289,7 @@ Each run creates `results/<name>_<timestamp>/` with the run itself and one folde
 
 | file | content |
 |---|---|
-| `manifest.yaml` | resolved config (with the dtype each model actually ran in), full prompt and schema text, GPU, torch and package versions; its `statistics` and `visualization` select the analysis |
+| `manifest.yaml` | resolved config (with the dtype each model actually ran in and the commit of a Hugging Face dataset), full prompt and schema text, GPU, torch and package versions; its `statistics` and `visualization` select the analysis |
 | `generations.jsonl` | one line per model call: model, case, condition, run, exact `raw_response`, `status`, error `message`, validated `output` |
 | `alpha_<α>_<formats>_<dpi>dpi/` | one analysis, named after its settings, e.g. `alpha_0.05_pdf-png_300dpi` (`alpha_<α>_no-figures` without figures); it holds the three files below |
 | `results.xlsx` | sheets `generations` (one row per model call: status and parsed answer) and `tests` (one row per model × comparison × output) |
@@ -385,6 +389,7 @@ results_dir: results
 
 dataset:
   path: configs/cases.jsonl          # local file or hf://datasets/<owner>/<repo>/<file>
+  revision: null                     # hf:// only: branch, tag or commit (default: latest)
   sheet: null                        # Excel sheet name or index
   text_column: case_template         # column holding the case text
   id_column: null                    # default: case_0001, case_0002, ... (row numbers)

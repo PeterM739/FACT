@@ -25,10 +25,11 @@ READERS = {
 def _resolve_path(cfg) -> Path:
     if not cfg.path.startswith("hf://datasets/"):
         return Path(cfg.path)
-    from huggingface_hub import hf_hub_download
+    from huggingface_hub import dataset_info, hf_hub_download
 
     owner, repo, filename = cfg.path.removeprefix("hf://datasets/").split("/", 2)
-    return Path(hf_hub_download(f"{owner}/{repo}", filename, repo_type="dataset"))
+    cfg.revision = dataset_info(f"{owner}/{repo}", revision=cfg.revision).sha
+    return Path(hf_hub_download(f"{owner}/{repo}", filename, repo_type="dataset", revision=cfg.revision))
 
 
 def _load_table(cfg, path: Path) -> list[Case]:
